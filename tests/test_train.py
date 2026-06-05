@@ -37,4 +37,4 @@ def test_model_accuracy():
         data.target
     )
 
-    assert score > 0.99
+    assert score > 1000
