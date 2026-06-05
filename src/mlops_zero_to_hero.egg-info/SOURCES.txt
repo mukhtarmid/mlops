@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+src/mlops_zero_to_hero.egg-info/PKG-INFO
+src/mlops_zero_to_hero.egg-info/SOURCES.txt
+src/mlops_zero_to_hero.egg-info/dependency_links.txt
+src/mlops_zero_to_hero.egg-info/entry_points.txt
+src/mlops_zero_to_hero.egg-info/requires.txt
+src/mlops_zero_to_hero.egg-info/top_level.txt
