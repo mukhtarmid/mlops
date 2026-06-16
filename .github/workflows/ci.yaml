@@ -62,9 +62,10 @@ jobs:
       - name: Run Container
         run: |
           docker run -d \
-            -p 8000:8000 \
-            --name iris-api \
-            iris-api:v1
+          --name iris-api \
+          -p 8000:8000 \
+          -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+          iris-api
 
       - name: Verify API
         run: |
