@@ -10,7 +10,6 @@ COPY uv.lock* ./
 RUN uv pip install --system .
 
 COPY src src
-COPY models models
 
 EXPOSE 8000
 
