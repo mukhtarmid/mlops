@@ -1,7 +1,9 @@
 import joblib
 import mlflow
 import pandas as pd
-
+from functools import lru_cache
+import os
+from src.config import MLFLOW_TRACKING_URI
 # model = None
 LABELS = {
     0: "setosa",
@@ -10,12 +12,13 @@ LABELS = {
 }
 
 mlflow.set_tracking_uri(
-    "http://localhost:5000"
+    MLFLOW_TRACKING_URI
 )
-
-model = mlflow.pyfunc.load_model(
-    model_uri="models:/iris_classifier@production"
-)
+@lru_cache(maxsize=1)
+def get_model():
+    return mlflow.pyfunc.load_model(
+        "models:/iris_classifier@production"
+    )
 
 # def load_model():
 
@@ -38,6 +41,8 @@ def predict(features):
             "petal_width"
         ]
     )
+
+    model = get_model()
 
     prediction = model.predict(df)
 

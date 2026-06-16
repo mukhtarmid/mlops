@@ -1,6 +1,6 @@
 from pathlib import Path
 import os
-
+import pandas as pd
 import mlflow
 import mlflow.sklearn
 from mlflow import MlflowClient
@@ -9,26 +9,59 @@ from sklearn.datasets import load_iris
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
+from src.config import MLFLOW_TRACKING_URI
 
-import joblib
+def setup_mlflow():
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment("iris-training")
 
-MLFLOW_TRACKING_URI = os.getenv(
-    "MLFLOW_TRACKING_URI",
-    "http://localhost:5000"
-)
+def promote_if_better(
+    client,
+    candidate_version,
+    candidate_accuracy
+):
+    try:
+        production_version = (
+            client.get_model_version_by_alias(
+                MODEL_NAME,
+                "production"
+            )
+        )
 
-mlflow.set_tracking_uri(
-    MLFLOW_TRACKING_URI
-)
+        production_accuracy = float(
+            production_version.tags.get(
+                "accuracy",
+                0.0
+            )
+        )
 
-mlflow.set_experiment(
-    "iris-training"
-)
+    except Exception:
+        # No production model exists yet
+        production_version = None
+        production_accuracy = 0.0
 
-MODEL_DIR = Path("models")
-MODEL_DIR.mkdir(exist_ok=True)
+    if candidate_accuracy > production_accuracy:
 
-MODEL_PATH = MODEL_DIR / "model.pkl"
+        client.set_registered_model_alias(
+            MODEL_NAME,
+            "production",
+            candidate_version
+        )
+
+        print(
+            f"Promoted v{candidate_version} "
+            f"to production "
+            f"({candidate_accuracy:.4f} > "
+            f"{production_accuracy:.4f})"
+        )
+
+    else:
+
+        print(
+            f"Kept current production "
+            f"({production_accuracy:.4f} >= "
+            f"{candidate_accuracy:.4f})"
+        )
 
 MODEL_NAME = "iris_classifier"
 
@@ -47,6 +80,31 @@ def load_data():
         random_state=42
     )
 
+def save_reference_dataset(X_train):
+
+    reference_dir = Path(
+        "data/reference"
+    )
+
+    reference_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    reference_df = pd.DataFrame(
+        X_train,
+        columns=[
+            "sepal_length",
+            "sepal_width",
+            "petal_length",
+            "petal_width",
+        ]
+    )
+
+    reference_df.to_csv(
+        reference_dir / "train.csv",
+        index=False
+    )
 
 def train_model(
     X_train,
@@ -83,22 +141,11 @@ def evaluate_model(
     return accuracy
 
 
-def save_model(model):
-
-    joblib.dump(
-        model,
-        MODEL_PATH
-    )
-
-    return str(MODEL_PATH)
-
-
 def register_model(
     model,
     accuracy,
     n_estimators
 ):
-
     client = MlflowClient()
 
     with mlflow.start_run():
@@ -112,6 +159,7 @@ def register_model(
             "accuracy",
             accuracy
         )
+
         mlflow.log_param(
             "random_state",
             42
@@ -122,7 +170,7 @@ def register_model(
             "iris"
         )
 
-        model_info = mlflow.sklearn.log_model(
+        mlflow.sklearn.log_model(
             sk_model=model,
             artifact_path="model",
             registered_model_name=MODEL_NAME
@@ -137,20 +185,41 @@ def register_model(
             key=lambda x: int(x.version)
         )
 
+        latest_version_number = latest_version.version
+
         client.set_model_version_tag(
             name=MODEL_NAME,
-            version=latest_version.version,
+            version=latest_version_number,
             key="accuracy",
             value=str(accuracy)
         )
 
-        return latest_version.version
+        # Always assign new model to staging
+        client.set_registered_model_alias(
+            MODEL_NAME,
+            "staging",
+            latest_version_number
+        )
+
+        promote_if_better(
+            client,
+            latest_version_number,
+            accuracy
+        )
+
+        return latest_version_number
 
 def run_training_pipeline(
     n_estimators=200
 ):
 
+    setup_mlflow()
+    
     X_train, X_test, y_train, y_test = load_data()
+
+    save_reference_dataset(
+        X_train
+    )
 
     model = train_model(
         X_train,
@@ -168,8 +237,6 @@ def run_training_pipeline(
         raise Exception(
             f"Accuracy too low: {accuracy}"
         )
-
-    save_model(model)
 
     register_model(
         model,

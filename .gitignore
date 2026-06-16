@@ -19,3 +19,8 @@ data/
 
 *.env
 .env
+
+*.doc
+*.docx
+
+*.jsonl

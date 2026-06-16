@@ -13,5 +13,9 @@ spec:
 
       image: iris-api:v1
 
+      env:
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-service:5000"
+
       ports:
         - containerPort: 8000

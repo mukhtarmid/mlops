@@ -37,7 +37,9 @@ def model_info():
 
 @app.post("/predict")
 def get_prediction(data: IrisFeatures):
-        
+
+    global request_count
+
     features = [
         data.sepal_length,
         data.sepal_width,
@@ -48,8 +50,12 @@ def get_prediction(data: IrisFeatures):
         f"Prediction request received: {features}"
     )
 
-    prediction = predict(features)
+    request_count += 1
 
+    prediction = predict(features)
+    if prediction in prediction_counter:
+        prediction_counter[prediction] += 1
+    
     log_prediction(
         features,
         prediction
@@ -72,12 +78,8 @@ prediction_counter = {
 
 @app.get("/metrics")
 def metrics():
-    
-    global request_count
 
-    request_count += 1
     return {
         "requests": request_count,
         "predictions": prediction_counter
-
     }

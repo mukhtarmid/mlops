@@ -5,7 +5,7 @@ on:
     branches: [master]
 
   pull_request:
-    branches: [Master]
+    branches: [master]
 
 jobs:
   test:
@@ -23,13 +23,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run tests
+      - name: Start MLflow
         run: |
-          pytest
+          nohup mlflow server \
+          --backend-store-uri sqlite:///mlflow.db \
+          --default-artifact-root ./mlruns \
+          --host 127.0.0.1 \
+          --port 5000 > mlflow.log 2>&1 & 
+
+      - name: Wait for MLflow
+        run: sleep 15
+      
+      - name: Verify MLflow
+        run: |
+          curl http://127.0.0.1:5000
+
+      - name: Train and Register Model
+        run: |
+          python -m src.train
+        
+      - name: Run Unit Tests
+        run: |
+          pytest tests\units -v1
+
+      - name: Run Integration Tests
+        run: |
+          pytest tests/integration -v
       
       - name: Build Docker Image
         run: |
-          docker build -t iris-trainer:v1 .
+          docker build -t iris-api:v1 .
 
       - name: Run Container
         run: |
